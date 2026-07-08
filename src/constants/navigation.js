@@ -13,5 +13,9 @@ export const NAV_ITEMS = [
   { id: "reports", label: "التقارير", icon: "📈", roles: ["admin"] },
   { id: "treasury", label: "الخزينة", icon: "💰", roles: ["admin"] },
   { id: "expenses", label: "المصاريف", icon: "💰", roles: ["admin", "salesman"] },
-  { id: "transportation", label: "النقل", icon: "🚚", roles: ["admin", "salesman"] }
+  { id: "analytics", label: "التحليلات", icon: "🧠", roles: ["admin"] },
+  { id: "transportation", label: "النقل", icon: "🚚", roles: ["admin", "salesman"]
+    
+   }
+
 ];

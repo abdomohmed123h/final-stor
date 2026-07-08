@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Card, Table, Badge, Metric, Input, Select, Btn } from "../ui";
-import { fmt, todayStr } from "../../utils/format";
+import { fmt, todayStr, localDateStr } from "../../utils/format";
 import {
   exportInvoicesToCSV,
   exportExpensesToCSV
@@ -8,9 +8,11 @@ import {
 import {
   getCashMovements,
   cashRegisterBalance,
-  dailyCashHistory
+  dailyCashHistory,
+  localDateOf
 } from "../../utils/calculations";
 import { depositCategoryLabel } from "../../constants/treasuryCategories";
+import { AnimatedMetric } from "../dashboard/AnimatedMetric";
 
 const QUICK_FILTERS = [
   {
@@ -29,8 +31,8 @@ const QUICK_FILTERS = [
       const from = new Date();
       from.setDate(to.getDate() - 6);
       return {
-        from: from.toISOString().slice(0, 10),
-        to: to.toISOString().slice(0, 10)
+        from: localDateStr(from),
+        to: localDateStr(to)
       };
     }
   },
@@ -40,7 +42,7 @@ const QUICK_FILTERS = [
     getRange: () => {
       const now = new Date();
       const from = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from: from.toISOString().slice(0, 10), to: todayStr() };
+      return { from: localDateStr(from), to: todayStr() };
     }
   },
   {
@@ -83,7 +85,7 @@ export function ReportsPage({
   const filtered = useMemo(
     () =>
       invoices.filter((i) => {
-        const date = i.date.slice(0, 10);
+        const date = localDateOf(i.date);
         return (
           date >= from && date <= to && (type === "all" || i.type === type)
         );
@@ -93,7 +95,7 @@ export function ReportsPage({
   const filteredExpenses = useMemo(
     () =>
       expenses.filter((e) => {
-        const date = e.date.slice(0, 10);
+        const date = localDateOf(e.date);
         return date >= from && date <= to;
       }),
     [expenses, from, to]
@@ -102,7 +104,7 @@ export function ReportsPage({
     const all = [];
     customers.forEach((c) => {
       (c.returns || []).forEach((r) => {
-        const date = r.date.slice(0, 10);
+        const date = localDateOf(r.date);
         if (date >= from && date <= to) {
           all.push({ ...r, customerName: c.name });
         }
@@ -128,10 +130,6 @@ export function ReportsPage({
     .filter((i) => i.transportFeePaid)
     .reduce((s, i) => s + (i.transportFee || 0), 0);
 
-  // NOTE: uses itemsTotal (product-only revenue) when available, falling
-  // back to total for older invoices created before the transport-fee
-  // feature existed. This keeps transport fees out of product revenue,
-  // since they're already reported separately above.
   const totalSalesRaw = filtered
     .filter((i) => i.type === "sale")
     .reduce((s, i) => s + (i.itemsTotal ?? i.total), 0);
@@ -280,44 +278,57 @@ export function ReportsPage({
       <div
         style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 }}
       >
-        <Metric
+        <AnimatedMetric
           label="إجمالي المبيعات (قبل المرتجعات)"
-          value={fmt(totalSalesRaw)}
+          value={totalSalesRaw}
           color="#16a34a"
         />
-        <Metric
+        <AnimatedMetric
           label="إجمالي المرتجعات"
-          value={fmt(totalReturnsAmount)}
+          value={totalReturnsAmount}
           color="#ea580c"
         />
-        <Metric label="صافي المبيعات" value={fmt(totalSales)} color="#16a34a" />
-        <Metric
+        <AnimatedMetric
+          label="صافي المبيعات"
+          value={totalSales}
+          color="#16a34a"
+        />
+        <AnimatedMetric
           label="إجمالي المشتريات"
-          value={fmt(totalBuys)}
+          value={totalBuys}
           color="#dc2626"
         />
-        <Metric
+        <AnimatedMetric
           label="تكلفة البضاعة المباعة"
-          value={fmt(costOfGoodsSold)}
+          value={costOfGoodsSold}
           color="#7c3aed"
         />
-        <Metric
+        <AnimatedMetric
           label="إجمالي المصروفات"
-          value={fmt(totalExpenses)}
+          value={totalExpenses}
           color="#b91c1c"
         />
-        <Metric
+        <AnimatedMetric
           label="صافي الربح"
-          value={fmt(netProfit)}
+          value={netProfit}
           color={netProfit >= 0 ? "#16a34a" : "#dc2626"}
         />
-        <Metric label="إجمالي المحصل" value={fmt(totalPaid)} color="#2563eb" />
-        <Metric
+        <AnimatedMetric
+          label="إجمالي المحصل"
+          value={totalPaid}
+          color="#2563eb"
+        />
+        <AnimatedMetric
           label="إجمالي المتبقي"
-          value={fmt(totalRemaining)}
+          value={totalRemaining}
           color="#d97706"
         />
-        <Metric label="عدد الفواتير" value={filtered.length} />
+        <AnimatedMetric
+          label="عدد الفواتير"
+          value={filtered.length}
+          decimals={0}
+          suffix=""
+        />
       </div>
 
       <div
@@ -424,7 +435,7 @@ export function ReportsPage({
               rows={[...treasuryWithdrawals]
                 .filter(
                   (w) =>
-                    w.date.slice(0, 10) >= from && w.date.slice(0, 10) <= to
+                    localDateOf(w.date) >= from && localDateOf(w.date) <= to
                 )
                 .reverse()
                 .map((w) => [
@@ -456,7 +467,7 @@ export function ReportsPage({
               rows={[...treasuryDeposits]
                 .filter(
                   (d) =>
-                    d.date.slice(0, 10) >= from && d.date.slice(0, 10) <= to
+                    localDateOf(d.date) >= from && localDateOf(d.date) <= to
                 )
                 .reverse()
                 .map((d) => [
@@ -496,7 +507,7 @@ export function ReportsPage({
               ) : (
                 <Badge color="purple">شراء</Badge>
               ),
-              i.date.slice(0, 10),
+              localDateOf(i.date),
               i.partyName || "—",
               fmt(i.total),
               fmt(i.paid),
@@ -619,7 +630,7 @@ export function ReportsPage({
             rows={[...filteredTransportJobs]
               .reverse()
               .map((i) => [
-                i.date.slice(0, 10),
+                localDateOf(i.date),
                 i.id.slice(-6).toUpperCase(),
                 i.partyName || "—",
                 i.transportPersonName || "—",
@@ -671,7 +682,7 @@ export function ReportsPage({
             rows={[...filteredExpenses]
               .reverse()
               .map((e) => [
-                e.date.slice(0, 10),
+                localDateOf(e.date),
                 <Badge color="red">{e.category}</Badge>,
                 <span style={{ color: "#dc2626", fontWeight: 600 }}>
                   {fmt(e.amount)}

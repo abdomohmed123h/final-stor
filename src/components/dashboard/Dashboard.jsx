@@ -11,6 +11,8 @@ import {
   netCashForDate,
   cashRegisterBalance
 } from "../../utils/calculations";
+import { SalesTrendChart } from "./SalesTrendChart";
+import { AnimatedMetric } from "./AnimatedMetric";
 
 export function Dashboard({
   products,
@@ -111,35 +113,51 @@ export function Dashboard({
       </h2>
 
       <div className="flex gap-3 flex-wrap mb-5">
-        <Metric label="مبيعات اليوم" value={fmt(totalSales)} color="#16a34a" />
-        <Metric label="مشتريات اليوم" value={fmt(totalBuys)} color="#dc2626" />
-        <Metric
+        <AnimatedMetric
+          label="مبيعات اليوم"
+          value={totalSales}
+          color="#16a34a"
+        />
+
+        <AnimatedMetric
+          label="مشتريات اليوم"
+          value={totalBuys}
+          color="#dc2626"
+        />
+        <AnimatedMetric
           label="مصروفات اليوم"
-          value={fmt(totalExpenses)}
+          value={totalExpenses}
           color="#b91c1c"
         />
-        <Metric
+        <AnimatedMetric
           label="صافي اليوم"
-          value={fmt(netOfDay)}
+          value={netOfDay}
           color={netOfDay >= 0 ? "#16a34a" : "#dc2626"}
         />
-        <Metric
+        <AnimatedMetric
           label="رصيد الخزينة"
-          value={fmt(treasuryBalance)}
+          value={treasuryBalance}
           color="#0891b2"
         />
-        <Metric label="ديون العملاء" value={fmt(totalDebt)} color="#d97706" />
-        <Metric
+        <AnimatedMetric
+          label="ديون العملاء"
+          value={totalDebt}
+          color="#d97706"
+        />
+        <AnimatedMetric
           label="مستحقات الموردين"
-          value={fmt(totalOwed)}
+          value={totalOwed}
           color="#7c3aed"
         />
-        <Metric
+        <AnimatedMetric
           label="تنبيهات المخزن"
           value={lowStock.length}
           color={lowStock.length > 0 ? "#dc2626" : "#16a34a"}
+          decimals={0}
+          suffix=""
         />
       </div>
+      <SalesTrendChart invoices={invoices} />
 
       {lowStock.length > 0 && (
         <Card>

@@ -4,6 +4,7 @@ import { InvoiceItemsEditor } from "../shared/InvoiceItemsEditor";
 import { fmt } from "../../utils/format";
 import { calcItemsTotal } from "../../utils/calculations";
 import { useInvoiceItems } from "../../hooks/useInvoiceItems";
+import { SearchableSelect } from "../ui/SearchableSelect";
 
 export function SalesInvoiceForm({
   products,
@@ -80,18 +81,13 @@ export function SalesInvoiceForm({
   return (
     <Card>
       <div className="grid grid-cols-2 gap-3 mb-3">
-        <Select
+        <SearchableSelect
           label="العميل *"
           value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
-        >
-          <option value="">اختر العميل...</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
+          onChange={setCustomerId}
+          options={customers}
+          placeholder="اختر العميل..."
+        />
         <div />
       </div>
 

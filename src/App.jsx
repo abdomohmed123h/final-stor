@@ -21,6 +21,7 @@ import { ReportsPage } from "./components/reports/ReportsPage";
 import { TreasuryPage } from "./components/treasury/TreasuryPage";
 import { ExpensesPage } from "./components/Expenses.jsx/Expenses";
 import { TransportationPage } from "./components/transportation/TransportationPage";
+import { AnalyticsPage } from "./components/analytics/AnalyticsPage";
 
 export default function App() {
   const [users, setUsers] = useLocalStorageState("bu_users", INIT_USERS);
@@ -187,6 +188,17 @@ export default function App() {
         transportPersons={transportPersons}
       />
     ),
+
+    // pages object
+    analytics: (
+      <AnalyticsPage
+        invoices={invoices}
+        products={products}
+        customers={customers}
+        setModal={setModal}
+      />
+    ),
+
     treasury: (
       <TreasuryPage
         invoices={invoices}
