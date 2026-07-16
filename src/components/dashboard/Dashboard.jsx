@@ -20,7 +20,8 @@ export function Dashboard({
   customers,
   suppliers,
   expenses = [],
-  treasuryWithdrawals = []
+  treasuryWithdrawals = [],
+  reservations = []
 }) {
   const today = todayStr();
 
@@ -44,7 +45,9 @@ export function Dashboard({
       customers,
       suppliers,
       expenses,
-      treasuryWithdrawals
+      treasuryWithdrawals,
+      [],
+      reservations
     );
 
     return {
@@ -73,6 +76,7 @@ export function Dashboard({
     suppliers,
     expenses,
     treasuryWithdrawals,
+    reservations,
     today
   ]);
 

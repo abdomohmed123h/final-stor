@@ -1,19 +1,32 @@
 import { Card, Table, Btn } from "../ui";
 import { AddPartyModal } from "./AddPartyModal";
 import { PartyDetail } from "./PartyDetail";
+import { PartyAccountHistory } from "./PartyAccountHistory.jsx";
 import { PaymentModal } from "./PaymentModal";
 
 import { fmt, uid, now } from "../../utils/format";
-import { invoicesForParty, debtFor, creditFor } from "../../utils/calculations";
+import {
+  invoicesForParty,
+  debtFor,
+  creditFor,
+  reservationsForCustomer,
+  buildInvoiceFromReservation
+} from "../../utils/calculations";
 
 export function PartyPage({
   type,
   parties,
   setParties,
   invoices,
+  setInvoices,
+  products,
+  setProducts,
+  reservations = [],
+  setReservations,
   showToast,
   setModal,
-  treasuryBalance
+  treasuryBalance,
+  currentUser
 }) {
   const isCustomer = type === "customer";
   const label = isCustomer ? "العميل" : "المورد";
@@ -39,14 +52,11 @@ export function PartyPage({
   const recordPayment = (party, amount, note) => {
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) return showToast("أدخل مبلغاً صحيحاً");
-
-    // دفعة لمورد = فلوس خارجة من الخزنة، لازم نتأكد إن فيه رصيد كافي
     if (!isCustomer && amt > treasuryBalance) {
       return showToast(
         `⚠️ لا يوجد رصيد كافٍ في الخزينة (المتاح: ${fmt(treasuryBalance)})`
       );
     }
-
     const payment = { id: uid(), amount: amt, note: note || "", date: now() };
     setParties(
       parties.map((p) =>
@@ -71,14 +81,11 @@ export function PartyPage({
     if (amt <= 0) return showToast("أدخل مبلغاً صحيحاً");
     if (amt > available)
       return showToast(`لا يمكن السحب — الرصيد المتاح ${fmt(available)} فقط`);
-
-    // سحب/استرجاع لعميل = فلوس خارجة من الخزنة، لازم نتأكد إن فيه رصيد كافي
     if (isCustomer && amt > treasuryBalance) {
       return showToast(
         `⚠️ لا يوجد رصيد كافٍ في الخزينة (المتاح: ${fmt(treasuryBalance)})`
       );
     }
-
     const withdrawal = {
       id: uid(),
       amount: amt,
@@ -94,6 +101,127 @@ export function PartyPage({
     );
     showToast(`✅ تم سحب ${fmt(amt)} لـ ${party.name}`);
     setModal(null);
+  };
+
+  const recordReservationPayment = (reservation, amount) => {
+    const amt = parseFloat(amount) || 0;
+    if (amt <= 0) return showToast("أدخل مبلغاً صحيحاً");
+    setReservations(
+      reservations.map((r) =>
+        r.id === reservation.id
+          ? {
+              ...r,
+              paid: r.paid + amt,
+              history: [
+                ...(r.history || []),
+                {
+                  date: now(),
+                  action: `تسجيل دفعة ${fmt(amt)}`,
+                  by: currentUser?.name || ""
+                }
+              ]
+            }
+          : r
+      )
+    );
+    showToast(`✅ تم تسجيل دفعة ${fmt(amt)} على الحجز`);
+  };
+
+  const cancelReservation = (reservation) => {
+    setReservations(
+      reservations.map((r) =>
+        r.id === reservation.id
+          ? {
+              ...r,
+              status: "cancelled",
+              history: [
+                ...(r.history || []),
+                {
+                  date: now(),
+                  action: "تم إلغاء الحجز",
+                  by: currentUser?.name || ""
+                }
+              ]
+            }
+          : r
+      )
+    );
+
+    // If money was already paid on this reservation, it doesn't vanish --
+    // it becomes usable customer credit (رصيد على المخزن), since the cash
+    // itself was already recorded once via the reservation's own payments.
+    if (reservation.paid > 0) {
+      setCustomers(
+        customers.map((c) =>
+          c.id === reservation.customerId
+            ? {
+                ...c,
+                payments: [
+                  ...(c.payments || []),
+                  {
+                    id: uid(),
+                    amount: reservation.paid,
+                    date: now(),
+                    note: `تحويل مبلغ حجز ملغى إلى رصيد العميل (${reservation.productName || ""})`,
+                    isInternalTransfer: true // prevents double-counting in treasury
+                  }
+                ]
+              }
+            : c
+        )
+      );
+    }
+
+    showToast("🗑️ تم إلغاء الحجز، وتحويل أي مبلغ مدفوع إلى رصيد العميل");
+    setModal(null);
+  };
+
+  const convertReservationToSale = (reservation) => {
+    const product = products.find((p) => p.id === reservation.productId);
+    if (!product) return showToast("❌ الصنف لم يعد موجوداً، لا يمكن التحويل");
+    if (product.stock < reservation.qty) {
+      return showToast(
+        `⚠️ المخزون غير كافٍ (المتاح: ${product.stock} ${product.unit})`
+      );
+    }
+
+    setProducts(
+      products.map((p) =>
+        p.id === reservation.productId
+          ? { ...p, stock: p.stock - reservation.qty }
+          : p
+      )
+    );
+
+    const invoice = {
+      id: uid(),
+      ...buildInvoiceFromReservation(reservation, currentUser?.name)
+    };
+    setInvoices([...invoices, invoice]);
+
+    setReservations(
+      reservations.map((r) =>
+        r.id === reservation.id
+          ? {
+              ...r,
+              status: "completed",
+              convertedInvoiceId: invoice.id,
+              history: [
+                ...(r.history || []),
+                {
+                  date: now(),
+                  action: `تم التحويل إلى فاتورة بيع #${invoice.id.slice(-6).toUpperCase()}`,
+                  by: currentUser?.name || ""
+                }
+              ]
+            }
+          : r
+      )
+    );
+
+    showToast(
+      `✅ تم تحويل الحجز إلى فاتورة بيع #${invoice.id.slice(-6).toUpperCase()}`
+    );
   };
 
   return (
@@ -146,6 +274,10 @@ export function PartyPage({
               p.returns || []
             );
             const partyInvoices = invoicesForParty(invoices, p.id);
+            const partyReservations = isCustomer
+              ? reservationsForCustomer(reservations, p.id)
+              : [];
+
             return [
               p.name,
               p.phone || "—",
@@ -172,6 +304,10 @@ export function PartyPage({
                       payments={p.payments || []}
                       withdrawals={p.withdrawals || []}
                       returns={p.returns || []}
+                      reservations={partyReservations}
+                      onPayReservation={recordReservationPayment}
+                      onCancelReservation={cancelReservation}
+                      onConvertReservationToSale={convertReservationToSale}
                       onClose={() => setModal(null)}
                     />
                   )
@@ -184,12 +320,10 @@ export function PartyPage({
                 color="purple"
                 onClick={() =>
                   setModal(
-                    <PartyDetail
+                    <PartyAccountHistory
                       party={p}
-                      invoices={partyInvoices}
-                      payments={p.payments || []}
-                      withdrawals={p.withdrawals || []}
-                      returns={p.returns || []}
+                      invoices={invoices}
+                      reservations={reservations}
                       onClose={() => setModal(null)}
                     />
                   )

@@ -14,8 +14,12 @@ export function SalesPage({
   transportPersons = [],
   invoices,
   setInvoices,
+  expenses,
+  setExpenses,
+  reservations = [],
   showToast,
   setModal,
+  employees,
   currentUser
 }) {
   const [processingReturn, setProcessingReturn] = useState(false);
@@ -29,7 +33,9 @@ export function SalesPage({
     paid,
     notes,
     transportId,
-    deliveryAddress
+    deliveryAddress,
+    employeeIds,
+    loadingFee
   }) => {
     const updatedProducts = products.map((p) => {
       const item = items.find((i) => i.productId === p.id);
@@ -40,6 +46,9 @@ export function SalesPage({
     const transportPerson = transportId
       ? transportPersons.find((t) => t.id === transportId)
       : null;
+    const employeeNames = (employeeIds || [])
+      .map((id) => employees.find((e) => e.id === id)?.name)
+      .filter(Boolean);
 
     const invoice = {
       id: uid(),
@@ -51,18 +60,34 @@ export function SalesPage({
         ...item,
         productName: products.find((p) => p.id === item.productId)?.name || ""
       })),
-      itemsTotal, // value of goods alone, kept for reference/reports
-      transportFee, // transport portion, kept for transport reports
-      total, // itemsTotal + transportFee — full amount owed
+      itemsTotal,
+      transportFee,
+      total,
       paid,
       notes,
       createdBy: currentUser.name,
       transportId: transportId || null,
       transportPersonName: transportPerson?.name || "",
       deliveryAddress: deliveryAddress || "",
-      transportFeePaid: false
+      transportFeePaid: false,
+      employeeIds: employeeIds || [],
+      employeeNames
     };
     setInvoices([...invoices, invoice]);
+
+    // Loading fee is NOT part of the invoice -- it's a cost the shop pays its
+    // own workers, recorded automatically as an expense, not charged to the customer.
+    if (employeeIds?.length > 0 && loadingFee > 0) {
+      const expense = {
+        id: uid(),
+        amount: loadingFee,
+        category: "أجرة تحميل/تفريغ",
+        note: `فاتورة بيع ${invoice.id.slice(-6).toUpperCase()} — عمال: ${employeeNames.join("، ")}`,
+        date: now()
+      };
+      setExpenses([...expenses, expense]);
+    }
+
     showToast("✅ تم تسجيل فاتورة البيع");
     setModal(<InvoicePreview inv={invoice} onClose={() => setModal(null)} />);
   };
@@ -149,9 +174,13 @@ export function SalesPage({
       <SalesInvoiceForm
         products={products}
         customers={customers}
+        setCustomers={setCustomers}
+        setModal={setModal}
         transportPersons={transportPersons}
+        reservations={reservations}
         onSubmit={handleSubmit}
         showToast={showToast}
+        employees={employees}
       />
 
       <Card>

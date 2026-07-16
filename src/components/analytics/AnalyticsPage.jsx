@@ -34,7 +34,7 @@ const bucketColor = {
   "غير محدد": "gray"
 };
 
-// Vibrant, fully distinct palette — one identity per chart.
+// Vibrant, fully distinct palette -- one identity per chart.
 const PALETTE = {
   topProducts: "#ec4899", // pink
   profitable: "#8b5cf6", // violet
@@ -272,7 +272,7 @@ export function AnalyticsPage({ invoices, products, customers, setModal }) {
                 margin={{ left: 40 }}
                 onClick={(e) =>
                   e?.activePayload?.[0] &&
-                  openCustomerDetail(e.activePayload[0].payload.partyId)
+                  openCustomerDetail(e.activePayload[0].payload.id)
                 }
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -408,7 +408,7 @@ export function AnalyticsPage({ invoices, products, customers, setModal }) {
               <Badge color={bucketColor[a.bucket] || "gray"}>{a.bucket}</Badge>,
               <button
                 className="text-blue-600 text-xs underline"
-                onClick={() => openCustomerDetail(a.customerId)}
+                onClick={() => openCustomerDetail(a.id)}
               >
                 عرض الحساب
               </button>

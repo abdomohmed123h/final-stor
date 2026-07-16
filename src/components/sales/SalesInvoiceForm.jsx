@@ -1,15 +1,25 @@
 import { useState } from "react";
 import { Card, Select, Input, Btn } from "../ui";
 import { InvoiceItemsEditor } from "../shared/InvoiceItemsEditor";
-import { fmt } from "../../utils/format";
-import { calcItemsTotal } from "../../utils/calculations";
+import { EmployeeMultiSelect } from "../shared/EmployeeMultiSelect";
+import { AddPartyModal } from "../parties/AddPartyModal";
+import { ReservationWarningModal } from "./ReservationWarningModal";
+import { ReservationDetailModal } from "../reservations/ReservationDetailModal";
+import { fmt, uid, now } from "../../utils/format";
+import {
+  calcItemsTotal,
+  activeReservationsForProduct
+} from "../../utils/calculations";
 import { useInvoiceItems } from "../../hooks/useInvoiceItems";
-import { SearchableSelect } from "../ui/SearchableSelect";
 
 export function SalesInvoiceForm({
   products,
   customers,
+  setCustomers,
+  setModal,
   transportPersons = [],
+  employees = [],
+  reservations = [],
   onSubmit,
   showToast
 }) {
@@ -18,16 +28,14 @@ export function SalesInvoiceForm({
   const [customerId, setCustomerId] = useState("");
   const [paid, setPaid] = useState(0);
   const [notes, setNotes] = useState("");
-
   const [transportId, setTransportId] = useState("");
   const [transportFee, setTransportFee] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [employeeIds, setEmployeeIds] = useState([]);
+  const [loadingFee, setLoadingFee] = useState("");
 
   const itemsTotal = calcItemsTotal(items);
   const transportFeeValue = transportId ? parseFloat(transportFee) || 0 : 0;
-
-  // Grand total now includes transport fee, so it's visible everywhere the
-  // invoice total is displayed/printed — not hidden as a separate field.
   const total = itemsTotal + transportFeeValue;
   const remaining = total - (parseFloat(paid) || 0);
 
@@ -35,40 +43,47 @@ export function SalesInvoiceForm({
     (t) => t.status !== "inactive"
   );
 
-  const handleSubmit = () => {
-    if (!customerId) {
-      showToast("يجب اختيار العميل قبل تسجيل الفاتورة");
-      return;
-    }
-    if (!items[0].productId) {
-      showToast("اختر صنفاً على الأقل");
-      return;
-    }
-    for (const item of items) {
-      const product = products.find((p) => p.id === item.productId);
-      if (!product) continue;
-      if ((parseFloat(item.qty) || 0) > product.stock) {
-        showToast(`المخزون غير كافٍ للصنف: ${product.name}`);
-        return;
-      }
-    }
-    if (transportId && transportFeeValue <= 0) {
-      showToast("أدخل قيمة أجرة النقل");
-      return;
-    }
+  // Opens AddPartyModal right from the sales form. On save, the new
+  // customer is created and immediately selected for this invoice --
+  // no need to leave the page.
+  const openAddCustomer = () => {
+    setModal(
+      <AddPartyModal
+        label="العميل"
+        onSave={(form) => {
+          const newCustomer = {
+            id: uid(),
+            ...form,
+            payments: [],
+            withdrawals: [],
+            returns: [],
+            createdAt: now()
+          };
+          setCustomers([...customers, newCustomer]);
+          setCustomerId(newCustomer.id);
+          showToast("✅ تم إضافة العميل واختياره");
+          setModal(null);
+        }}
+        onClose={() => setModal(null)}
+      />
+    );
+  };
 
-    onSubmit({
-      items,
-      customerId,
-      itemsTotal,
-      transportFee: transportFeeValue,
-      total,
-      paid: parseFloat(paid) || 0,
-      notes,
-      transportId: transportId || null,
-      deliveryAddress: transportId ? deliveryAddress : ""
-    });
+  const buildPayload = () => ({
+    items,
+    customerId,
+    itemsTotal,
+    transportFee: transportFeeValue,
+    total,
+    paid: parseFloat(paid) || 0,
+    notes,
+    transportId: transportId || null,
+    deliveryAddress: transportId ? deliveryAddress : "",
+    employeeIds,
+    loadingFee: employeeIds.length > 0 ? parseFloat(loadingFee) || 0 : 0
+  });
 
+  const resetForm = () => {
     resetItems();
     setCustomerId("");
     setPaid(0);
@@ -76,20 +91,110 @@ export function SalesInvoiceForm({
     setTransportId("");
     setTransportFee("");
     setDeliveryAddress("");
+    setEmployeeIds([]);
+    setLoadingFee("");
+  };
+
+  // Actually submits the invoice (called directly if no reservation
+  // conflicts exist, or after the user confirms "متابعة البيع" on the
+  // warning modal).
+  const finalizeSubmit = () => {
+    onSubmit(buildPayload());
+    resetForm();
+  };
+
+  // Finds active reservations on any selected product that belong to a
+  // DIFFERENT customer than the one selected for this sale. Reservations
+  // never block or reduce stock -- this is a warning only, per spec.
+  const findReservationConflicts = () => {
+    const conflicts = [];
+    items.forEach((item) => {
+      if (!item.productId) return;
+      const productReservations = activeReservationsForProduct(
+        reservations,
+        item.productId
+      );
+      productReservations.forEach((r) => {
+        if (r.customerId !== customerId) conflicts.push(r);
+      });
+    });
+    return conflicts;
+  };
+
+  const handleSubmit = () => {
+    if (!customerId) return showToast("يجب اختيار العميل قبل تسجيل الفاتورة");
+    if (!items[0].productId) return showToast("اختر صنفاً على الأقل");
+    for (const item of items) {
+      const product = products.find((p) => p.id === item.productId);
+      if (!product) continue;
+      if ((parseFloat(item.qty) || 0) > product.stock)
+        return showToast(`المخزون غير كافٍ للصنف: ${product.name}`);
+    }
+    if (transportId && transportFeeValue <= 0)
+      return showToast("أدخل قيمة أجرة النقل");
+    if (employeeIds.length > 0 && (parseFloat(loadingFee) || 0) <= 0)
+      return showToast("أدخل قيمة أجرة التحميل");
+
+    // Reservation check -- runs last, right before actually submitting.
+    const conflicts = findReservationConflicts();
+    if (conflicts.length > 0) {
+      setModal(
+        <ReservationWarningModal
+          conflicts={conflicts}
+          onContinue={() => {
+            setModal(null);
+            finalizeSubmit();
+          }}
+          onCancel={() => setModal(null)}
+          onViewDetail={(reservation) =>
+            setModal(
+              <ReservationDetailModal
+                reservation={reservation}
+                readOnly
+                onClose={() =>
+                  setModal(
+                    <ReservationWarningModal
+                      conflicts={conflicts}
+                      onContinue={() => {
+                        setModal(null);
+                        finalizeSubmit();
+                      }}
+                      onCancel={() => setModal(null)}
+                      onViewDetail={() => {}}
+                    />
+                  )
+                }
+              />
+            )
+          }
+        />
+      );
+      return;
+    }
+
+    finalizeSubmit();
   };
 
   return (
     <Card>
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <SearchableSelect
+      <div className="grid grid-cols-2 gap-3 mb-1">
+        <Select
           label="العميل *"
           value={customerId}
-          onChange={setCustomerId}
-          options={customers}
-          placeholder="اختر العميل..."
-        />
+          onChange={(e) => setCustomerId(e.target.value)}
+        >
+          <option value="">اختر العميل...</option>
+          {customers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
         <div />
       </div>
+      <Btn type="button" onClick={openAddCustomer} color="red">
+        + إضافة عميل جديد
+      </Btn>
 
       <InvoiceItemsEditor
         items={items}
@@ -138,8 +243,17 @@ export function SalesInvoiceForm({
         )}
       </div>
 
+      <div className="border-t border-gray-100 mt-3 pt-3">
+        <EmployeeMultiSelect
+          employees={employees}
+          selectedIds={employeeIds}
+          onChange={setEmployeeIds}
+          loadingFee={loadingFee}
+          onLoadingFeeChange={setLoadingFee}
+        />
+      </div>
+
       <div className="border-t border-gray-200 mt-3.5 pt-3.5">
-        {/* Price breakdown — shows the two components that make up the total. */}
         <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
           <div className="flex justify-between text-gray-600">
             <span>إجمالي الأصناف:</span>
@@ -152,7 +266,6 @@ export function SalesInvoiceForm({
             </div>
           )}
         </div>
-
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-green-50 rounded-lg p-2.5 text-center">
             <div className="text-[11px] text-gray-500">الإجمالي الكلي</div>

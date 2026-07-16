@@ -6,11 +6,19 @@ const TYPE_BADGE = {
   sale: "blue",
   payment: "green",
   withdrawal: "orange",
-  return: "purple"
+  return: "purple",
+  reservation: "gray",
+  reservation_payment: "green",
+  reservation_credit_transfer: "cyan"
 };
 
-export function PartyAccountHistory({ party, invoices, onClose }) {
-  const history = partyAccountHistory(invoices, party);
+export function PartyAccountHistory({
+  party,
+  invoices,
+  reservations = [],
+  onClose
+}) {
+  const history = partyAccountHistory(invoices, party, reservations);
 
   return (
     <Modal title={`سجل الحساب: ${party.name}`} onClose={onClose}>
@@ -38,7 +46,7 @@ export function PartyAccountHistory({ party, invoices, onClose }) {
             new Date(h.date).toLocaleString("ar-EG"),
             <Badge color={TYPE_BADGE[h.type] || "gray"}>{h.typeLabel}</Badge>,
             h.invoiceNumber,
-            fmt(h.amount),
+            h.amount ? fmt(h.amount) : "—",
             h.note || "—"
           ])}
         />

@@ -22,8 +22,11 @@ import { TreasuryPage } from "./components/treasury/TreasuryPage";
 import { ExpensesPage } from "./components/Expenses.jsx/Expenses";
 import { TransportationPage } from "./components/transportation/TransportationPage";
 import { AnalyticsPage } from "./components/analytics/AnalyticsPage";
+import { EmployeesPage } from "./components/employees/EmployeesPage";
+import { ReservationsPage } from "./components/reservations/ReservationsPage";
 
 export default function App() {
+  const [employees, setEmployees] = useLocalStorageState("bu_employees", []);
   const [users, setUsers] = useLocalStorageState("bu_users", INIT_USERS);
   const [products, setProducts] = useLocalStorageState(
     "bu_products",
@@ -49,6 +52,10 @@ export default function App() {
   const { modal, setModal } = useModal();
   const [transportPersons, setTransportPersons] = useLocalStorageState(
     "bu_transport_persons",
+    []
+  );
+  const [reservations, setReservations] = useLocalStorageState(
+    "bu_reservations",
     []
   );
 
@@ -83,8 +90,10 @@ export default function App() {
         suppliers={suppliers}
         expenses={expenses}
         treasuryWithdrawals={treasuryWithdrawals}
+        reservations={reservations}
       />
     ),
+
     sales: (
       <SalesPage
         products={products}
@@ -97,6 +106,10 @@ export default function App() {
         showToast={showToast}
         setModal={setModal}
         currentUser={currentUser}
+        employees={employees}
+        expenses={expenses}
+        reservations={reservations}
+        setExpenses={setExpenses}
       />
     ),
     purchases: (
@@ -104,11 +117,14 @@ export default function App() {
         products={products}
         setProducts={setProducts}
         suppliers={suppliers}
+        setSuppliers={setSuppliers}
         invoices={invoices}
         setInvoices={setInvoices}
         showToast={showToast}
         setModal={setModal}
         currentUser={currentUser}
+        employees={employees}
+        setEmployees={setEmployees}
       />
     ),
     inventory: (
@@ -125,9 +141,15 @@ export default function App() {
         parties={customers}
         setParties={setCustomers}
         invoices={invoices}
+        setInvoices={setInvoices}
+        products={products}
+        setProducts={setProducts}
+        reservations={reservations}
+        setReservations={setReservations}
         showToast={showToast}
         setModal={setModal}
         treasuryBalance={treasuryBalance}
+        currentUser={currentUser}
       />
     ),
     suppliers: (
@@ -186,6 +208,7 @@ export default function App() {
         showToast={showToast}
         setModal={setModal}
         transportPersons={transportPersons}
+        products={products}
       />
     ),
 
@@ -198,7 +221,15 @@ export default function App() {
         setModal={setModal}
       />
     ),
-
+    employees: (
+      <EmployeesPage
+        employees={employees}
+        setEmployees={setEmployees}
+        invoices={invoices}
+        showToast={showToast}
+        setModal={setModal}
+      />
+    ),
     treasury: (
       <TreasuryPage
         invoices={invoices}
@@ -209,9 +240,25 @@ export default function App() {
         setTreasuryWithdrawals={setTreasuryWithdrawals}
         treasuryDeposits={treasuryDeposits}
         setTreasuryDeposits={setTreasuryDeposits}
+        reservations={reservations}
         currentUser={currentUser}
         showToast={showToast}
         setModal={setModal}
+      />
+    ),
+    reservations: (
+      <ReservationsPage
+        reservations={reservations}
+        setReservations={setReservations}
+        products={products}
+        setProducts={setProducts}
+        customers={customers}
+        setCustomers={setCustomers}
+        invoices={invoices}
+        setInvoices={setInvoices}
+        setModal={setModal}
+        showToast={showToast}
+        currentUser={currentUser}
       />
     ),
     transportation: (

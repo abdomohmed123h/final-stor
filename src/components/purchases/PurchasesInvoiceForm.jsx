@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { Card, Select, Input, Btn } from "../ui";
 import { InvoiceItemsEditor } from "../shared/InvoiceItemsEditor";
-import { fmt } from "../../utils/format";
+import { EmployeeMultiSelect } from "../shared/EmployeeMultiSelect";
+import { AddPartyModal } from "../parties/AddPartyModal";
+import { fmt, uid, now } from "../../utils/format";
 import { calcItemsTotal } from "../../utils/calculations";
 import { useInvoiceItems } from "../../hooks/useInvoiceItems";
 
 export function PurchasesInvoiceForm({
   products,
   suppliers,
+  setSuppliers,
+  setModal,
+  employees = [],
   onSubmit,
   showToast
 }) {
@@ -16,20 +21,63 @@ export function PurchasesInvoiceForm({
   const [supplierId, setSupplierId] = useState("");
   const [paid, setPaid] = useState(0);
   const [notes, setNotes] = useState("");
+  const [employeeIds, setEmployeeIds] = useState([]);
+  const [loadingFee, setLoadingFee] = useState("");
 
   const total = calcItemsTotal(items);
   const remaining = total - (parseFloat(paid) || 0);
+
+  // Opens AddPartyModal right from the purchase form. On save, the new
+  // supplier is created and immediately selected for this invoice --
+  // no need to leave the page.
+  const openAddSupplier = () => {
+    setModal(
+      <AddPartyModal
+        label="المورد"
+        onSave={(form) => {
+          const newSupplier = {
+            id: uid(),
+            ...form,
+            payments: [],
+            withdrawals: [],
+            returns: [],
+            createdAt: now()
+          };
+          setSuppliers([...suppliers, newSupplier]);
+          setSupplierId(newSupplier.id);
+          showToast("✅ تم إضافة المورد واختياره");
+          setModal(null);
+        }}
+        onClose={() => setModal(null)}
+      />
+    );
+  };
 
   const handleSubmit = () => {
     if (!items[0].productId) {
       showToast("اختر صنفاً على الأقل");
       return;
     }
+    if (employeeIds.length > 0 && (parseFloat(loadingFee) || 0) <= 0) {
+      showToast("أدخل قيمة أجرة التفريغ");
+      return;
+    }
 
-    onSubmit({ items, supplierId, total, paid: parseFloat(paid) || 0, notes });
+    onSubmit({
+      items,
+      supplierId,
+      total,
+      paid: parseFloat(paid) || 0,
+      notes,
+      employeeIds,
+      loadingFee: employeeIds.length > 0 ? parseFloat(loadingFee) || 0 : 0
+    });
     resetItems();
+    setSupplierId("");
     setPaid(0);
     setNotes("");
+    setEmployeeIds([]);
+    setLoadingFee("");
   };
 
   return (
@@ -46,6 +94,9 @@ export function PurchasesInvoiceForm({
           </option>
         ))}
       </Select>
+      <Btn type="button" onClick={openAddSupplier} color="red">
+        + إضافة مورد جديد
+      </Btn>
 
       <InvoiceItemsEditor
         items={items}
@@ -55,6 +106,16 @@ export function PurchasesInvoiceForm({
         onUpdateItem={updateItem}
         priceLabel="سعر الشراء"
       />
+
+      <div className="border-t border-gray-100 mt-3 pt-3">
+        <EmployeeMultiSelect
+          employees={employees}
+          selectedIds={employeeIds}
+          onChange={setEmployeeIds}
+          loadingFee={loadingFee}
+          onLoadingFeeChange={setLoadingFee}
+        />
+      </div>
 
       <div
         style={{

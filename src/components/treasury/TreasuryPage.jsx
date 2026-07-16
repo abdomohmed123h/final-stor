@@ -144,6 +144,7 @@ export function TreasuryPage({
   setTreasuryWithdrawals,
   treasuryDeposits,
   setTreasuryDeposits,
+  reservations = [],
   currentUser,
   showToast,
   setModal
@@ -165,7 +166,8 @@ export function TreasuryPage({
       suppliers,
       expenses,
       treasuryWithdrawals,
-      treasuryDeposits
+      treasuryDeposits,
+      reservations
     );
     return {
       balance: cashRegisterBalance(movements),
@@ -177,7 +179,8 @@ export function TreasuryPage({
     suppliers,
     expenses,
     treasuryWithdrawals,
-    treasuryDeposits
+    treasuryDeposits,
+    reservations
   ]);
 
   const handleDeposit = (amount, category, note) => {

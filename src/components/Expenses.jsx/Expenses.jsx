@@ -9,6 +9,7 @@ const CATEGORIES = [
   { label: "كهرباء ومياه", color: "blue" },
   { label: "رواتب", color: "green" },
   { label: "نقل وشحن", color: "orange" },
+  { label: "أجرة تحميل/تفريغ", color: "blue" },
   { label: "صيانة", color: "gray" },
   { label: "أخرى", color: "red" }
 ];

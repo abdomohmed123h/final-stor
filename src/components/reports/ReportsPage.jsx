@@ -1,5 +1,16 @@
 import { useState, useMemo } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  CartesianGrid
+} from "recharts";
 import { Card, Table, Badge, Metric, Input, Select, Btn } from "../ui";
+import { HoverMetricCard } from "../ui/HoverMetricCard";
 import { fmt, todayStr, localDateStr } from "../../utils/format";
 import {
   exportInvoicesToCSV,
@@ -9,7 +20,9 @@ import {
   getCashMovements,
   cashRegisterBalance,
   dailyCashHistory,
-  localDateOf
+  localDateOf,
+  monthlyNetProfitTrend,
+  totalInventoryValue
 } from "../../utils/calculations";
 import { depositCategoryLabel } from "../../constants/treasuryCategories";
 import { AnimatedMetric } from "../dashboard/AnimatedMetric";
@@ -30,10 +43,7 @@ const QUICK_FILTERS = [
       const to = new Date();
       const from = new Date();
       from.setDate(to.getDate() - 6);
-      return {
-        from: localDateStr(from),
-        to: localDateStr(to)
-      };
+      return { from: localDateStr(from), to: localDateStr(to) };
     }
   },
   {
@@ -61,6 +71,7 @@ export function ReportsPage({
   transportPersons = [],
   treasuryWithdrawals = [],
   treasuryDeposits = [],
+  reservations = [],
   currentUser,
   showToast,
   setModal
@@ -71,12 +82,15 @@ export function ReportsPage({
   const [activeQuickFilter, setActiveQuickFilter] = useState("today");
   const [transportFilter, setTransportFilter] = useState("all");
 
+  const inventory = useMemo(() => totalInventoryValue(products), [products]);
+
   const applyQuickFilter = (filter) => {
     const { from: f, to: t } = filter.getRange();
     setFrom(f);
     setTo(t);
     setActiveQuickFilter(filter.key);
   };
+
   const handleManualDate = (setter) => (e) => {
     setter(e.target.value);
     setActiveQuickFilter(null);
@@ -92,6 +106,7 @@ export function ReportsPage({
       }),
     [invoices, from, to, type]
   );
+
   const filteredExpenses = useMemo(
     () =>
       expenses.filter((e) => {
@@ -100,6 +115,7 @@ export function ReportsPage({
       }),
     [expenses, from, to]
   );
+
   const filteredReturns = useMemo(() => {
     const all = [];
     customers.forEach((c) => {
@@ -126,6 +142,7 @@ export function ReportsPage({
     (s, i) => s + (i.transportFee || 0),
     0
   );
+
   const transportCollectedInRange = filteredTransportJobs
     .filter((i) => i.transportFeePaid)
     .reduce((s, i) => s + (i.transportFee || 0), 0);
@@ -133,9 +150,11 @@ export function ReportsPage({
   const totalSalesRaw = filtered
     .filter((i) => i.type === "sale")
     .reduce((s, i) => s + (i.itemsTotal ?? i.total), 0);
+
   const totalBuys = filtered
     .filter((i) => i.type === "purchase")
     .reduce((s, i) => s + i.total, 0);
+
   const totalPaid = filtered.reduce((s, i) => s + i.paid, 0);
   const totalRemaining = filtered.reduce((s, i) => s + (i.total - i.paid), 0);
   const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
@@ -167,6 +186,11 @@ export function ReportsPage({
 
   const costOfGoodsSold = costOfGoodsSoldRaw - returnsCost;
   const netProfit = totalSales - costOfGoodsSold - totalExpenses;
+
+  const netProfitTrend = useMemo(
+    () => monthlyNetProfitTrend(invoices, products, expenses, 6),
+    [invoices, products, expenses]
+  );
 
   const { treasuryBalance, historyInRange } = useMemo(() => {
     const movements = getCashMovements(
@@ -204,7 +228,6 @@ export function ReportsPage({
       >
         📈 التقارير
       </h2>
-
       <Card>
         <div
           style={{
@@ -236,7 +259,6 @@ export function ReportsPage({
             </button>
           ))}
         </div>
-
         <div
           style={{
             display: "grid",
@@ -274,6 +296,22 @@ export function ReportsPage({
           </Btn>
         </div>
       </Card>
+
+      <div style={{ marginBottom: 16 }}>
+        <HoverMetricCard
+          label="إجمالي قيمة المخزون (تكلفة)"
+          value={inventory.costValue}
+          color="#0891b2"
+          details={{
+            title: "أعلى 4 أصناف من حيث القيمة",
+            rows: inventory.breakdown.slice(0, 4).map((p) => ({
+              label: p.name,
+              value: fmt(p.costValue),
+              color: "#0e7490"
+            }))
+          }}
+        />
+      </div>
 
       <div
         style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 }}
@@ -378,7 +416,6 @@ export function ReportsPage({
           دائن للعميل وليست نقدية فعلية. لإدارة السحب والإيداع من الخزينة، اذهب
           لصفحة "الخزينة" من القائمة الجانبية.
         </div>
-
         <h4
           style={{
             fontSize: 13,
@@ -417,7 +454,6 @@ export function ReportsPage({
             ])}
           />
         )}
-
         {treasuryWithdrawals.length > 0 && (
           <>
             <h4
@@ -449,7 +485,6 @@ export function ReportsPage({
             />
           </>
         )}
-
         {treasuryDeposits.length > 0 && (
           <>
             <h4
@@ -518,6 +553,37 @@ export function ReportsPage({
               </span>
             ])}
         />
+      </Card>
+
+      <Card>
+        <h3 className="text-sm font-semibold mb-3">
+          📊 المبيعات وصافي الربح — آخر 6 أشهر
+        </h3>
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={netProfitTrend}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="label" fontSize={11} />
+            <YAxis fontSize={11} />
+            <Tooltip formatter={(v) => fmt(v)} />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Line
+              type="monotone"
+              dataKey="revenue"
+              name="المبيعات"
+              stroke="#16a34a"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="netProfit"
+              name="صافي الربح"
+              stroke="#7c3aed"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </Card>
 
       <Card>
