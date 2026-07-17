@@ -102,7 +102,6 @@ export function PartyPage({
     showToast(`✅ تم سحب ${fmt(amt)} لـ ${party.name}`);
     setModal(null);
   };
-
   const recordReservationPayment = (reservation, amount) => {
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) return showToast("أدخل مبلغاً صحيحاً");
@@ -112,6 +111,16 @@ export function PartyPage({
           ? {
               ...r,
               paid: r.paid + amt,
+              payments: [
+                ...(r.payments || []),
+                {
+                  id: uid(),
+                  amount: amt,
+                  date: now(),
+                  by: currentUser?.name || "",
+                  note: "دفعة إضافية"
+                }
+              ],
               history: [
                 ...(r.history || []),
                 {
@@ -126,7 +135,6 @@ export function PartyPage({
     );
     showToast(`✅ تم تسجيل دفعة ${fmt(amt)} على الحجز`);
   };
-
   const cancelReservation = (reservation) => {
     setReservations(
       reservations.map((r) =>
@@ -151,13 +159,13 @@ export function PartyPage({
     // it becomes usable customer credit (رصيد على المخزن), since the cash
     // itself was already recorded once via the reservation's own payments.
     if (reservation.paid > 0) {
-      setCustomers(
-        customers.map((c) =>
-          c.id === reservation.customerId
+      setParties(
+        parties.map((p) =>
+          p.id === reservation.customerId
             ? {
-                ...c,
+                ...p,
                 payments: [
-                  ...(c.payments || []),
+                  ...(p.payments || []),
                   {
                     id: uid(),
                     amount: reservation.paid,
@@ -167,7 +175,7 @@ export function PartyPage({
                   }
                 ]
               }
-            : c
+            : p
         )
       );
     }
@@ -175,7 +183,6 @@ export function PartyPage({
     showToast("🗑️ تم إلغاء الحجز، وتحويل أي مبلغ مدفوع إلى رصيد العميل");
     setModal(null);
   };
-
   const convertReservationToSale = (reservation) => {
     const product = products.find((p) => p.id === reservation.productId);
     if (!product) return showToast("❌ الصنف لم يعد موجوداً، لا يمكن التحويل");

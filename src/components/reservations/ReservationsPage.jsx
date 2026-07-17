@@ -2,7 +2,10 @@ import { useState } from "react";
 import { Card, Table, Btn, Badge } from "../ui";
 import { AddReservationModal } from "./AddReservationModal";
 import { fmt, uid, now } from "../../utils/format";
-import { reservationPaymentStatus } from "../../utils/calculations";
+import {
+  reservationPaymentStatus,
+  reservationEffectivePaid
+} from "../../utils/calculations";
 
 export function ReservationsPage({
   reservations,
@@ -24,6 +27,7 @@ export function ReservationsPage({
   const customersWithReservations = new Set(
     reservations.filter((r) => r.status === "active").map((r) => r.customerId)
   ).size;
+
   const addReservation = (form) => {
     const product = products.find((p) => p.id === form.productId);
     const customer = customers.find((c) => c.id === form.customerId);
@@ -78,6 +82,7 @@ export function ReservationsPage({
     showToast("✅ تم تسجيل الحجز");
     setModal(null);
   };
+
   const addPayment = (reservation, amount) => {
     setReservations(
       reservations.map((r) =>
@@ -87,11 +92,21 @@ export function ReservationsPage({
               paid: r.paid + amount,
               payments: [
                 ...(r.payments || []),
-                { id: uid(), amount, date: now(), by: currentUser?.name || "", note: "دفعة إضافية" }
+                {
+                  id: uid(),
+                  amount,
+                  date: now(),
+                  by: currentUser?.name || "",
+                  note: "دفعة إضافية"
+                }
               ],
               history: [
                 ...(r.history || []),
-                { date: now(), action: `تسجيل دفعة ${fmt(amount)}`, by: currentUser?.name || "" }
+                {
+                  date: now(),
+                  action: `تسجيل دفعة ${fmt(amount)}`,
+                  by: currentUser?.name || ""
+                }
               ]
             }
           : r
@@ -114,6 +129,7 @@ export function ReservationsPage({
                 invoices={invoices}
                 onSave={addReservation}
                 onClose={() => setModal(null)}
+                showToast={showToast}
               />
             )
           }
@@ -170,24 +186,27 @@ export function ReservationsPage({
               "حالة الدفع",
               "التاريخ"
             ]}
-            rows={filtered.map((r) => [
-              r.customerName,
-              r.productName,
-              `${r.qty} ${r.unit || ""}`,
-              fmt(r.total),
-              fmt(r.paid),
-              <span
-                className={
-                  r.total - r.paid > 0
-                    ? "text-red-600 font-semibold"
-                    : "text-green-600"
-                }
-              >
-                {fmt(r.total - r.paid)}
-              </span>,
-              <Badge color="gray">{reservationPaymentStatus(r)}</Badge>,
-              new Date(r.date).toLocaleDateString("ar-EG")
-            ])}
+            rows={filtered.map((r) => {
+              const effectivePaid = reservationEffectivePaid(r);
+              return [
+                r.customerName,
+                r.productName,
+                `${r.qty} ${r.unit || ""}`,
+                fmt(r.total),
+                fmt(effectivePaid),
+                <span
+                  className={
+                    r.total - effectivePaid > 0
+                      ? "text-red-600 font-semibold"
+                      : "text-green-600"
+                  }
+                >
+                  {fmt(r.total - effectivePaid)}
+                </span>,
+                <Badge color="gray">{reservationPaymentStatus(r)}</Badge>,
+                new Date(r.date).toLocaleDateString("ar-EG")
+              ];
+            })}
           />
         )}
       </Card>

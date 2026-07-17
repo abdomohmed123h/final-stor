@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   LineChart,
   Line,
@@ -9,7 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid
 } from "recharts";
-import { Card, Table, Badge, Metric, Input, Select, Btn } from "../ui";
+import { Table, Badge, Metric, Input, Select, Btn } from "../ui";
 import { HoverMetricCard } from "../ui/HoverMetricCard";
 import { fmt, todayStr, localDateStr } from "../../utils/format";
 import {
@@ -61,6 +62,57 @@ const QUICK_FILTERS = [
     getRange: () => ({ from: "0000-01-01", to: "9999-12-31" })
   }
 ];
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.98 },
+  visible: (i) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { delay: i * 0.06, duration: 0.4, ease: "easeOut" }
+  })
+};
+
+function SectionCard({
+  title,
+  icon,
+  index,
+  children,
+  footnote,
+  accent,
+  headerExtra
+}) {
+  return (
+    <motion.div
+      custom={index}
+      initial="hidden"
+      animate="visible"
+      variants={cardVariants}
+      whileHover={{ y: -3 }}
+      style={{ transition: "box-shadow 0.2s" }}
+    >
+      <div
+        className="bg-white rounded-xl border shadow-sm hover:shadow-lg transition-shadow p-4 mb-4"
+        style={{ borderTop: `3px solid ${accent}` }}
+      >
+        <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
+          <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+            <span>{icon}</span> {title}
+          </h3>
+          {headerExtra}
+        </div>
+        {children}
+        {footnote && (
+          <div className="text-xs text-gray-400 mt-2">{footnote}</div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function EmptyState({ text }) {
+  return <div className="text-center text-gray-400 text-sm py-8">{text}</div>;
+}
 
 export function ReportsPage({
   invoices,
@@ -192,81 +244,75 @@ export function ReportsPage({
     [invoices, products, expenses]
   );
 
-  const { treasuryBalance, historyInRange } = useMemo(() => {
-    const movements = getCashMovements(
+  const { treasuryBalance, historyInRange, movementsBreakdown } =
+    useMemo(() => {
+      const movements = getCashMovements(
+        invoices,
+        customers,
+        suppliers,
+        expenses,
+        treasuryWithdrawals,
+        treasuryDeposits,
+        reservations
+      );
+      const fullHistory = dailyCashHistory(movements);
+      const balance = cashRegisterBalance(movements);
+      const inRange = fullHistory.filter((h) => h.date >= from && h.date <= to);
+
+      const bySource = {};
+      movements.forEach((m) => {
+        const key = m.direction === "in" ? "in" : "out";
+        bySource[key] = (bySource[key] || 0) + m.amount;
+      });
+
+      return {
+        treasuryBalance: balance,
+        historyInRange: inRange,
+        movementsBreakdown: bySource
+      };
+    }, [
       invoices,
       customers,
       suppliers,
       expenses,
       treasuryWithdrawals,
-      treasuryDeposits
-    );
-    const fullHistory = dailyCashHistory(movements);
-    const balance = cashRegisterBalance(movements);
-    const inRange = fullHistory.filter((h) => h.date >= from && h.date <= to);
-    return { treasuryBalance: balance, historyInRange: inRange };
-  }, [
-    invoices,
-    customers,
-    suppliers,
-    expenses,
-    treasuryWithdrawals,
-    treasuryDeposits,
-    from,
-    to
-  ]);
+      treasuryDeposits,
+      reservations,
+      from,
+      to
+    ]);
 
   return (
     <div>
-      <h2
-        style={{
-          fontSize: 18,
-          fontWeight: 700,
-          color: "#1e293b",
-          marginBottom: 16
-        }}
+      <motion.h2
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-lg font-bold text-slate-800 mb-5"
       >
         📈 التقارير
-      </h2>
-      <Card>
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginBottom: 14
-          }}
-        >
+      </motion.h2>
+
+      <SectionCard title="فلاتر الفترة" icon="🗓️" index={0} accent="#2563eb">
+        <div className="flex gap-2 flex-wrap mb-4">
           {QUICK_FILTERS.map((f) => (
             <button
               key={f.key}
               onClick={() => applyQuickFilter(f)}
+              className="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors"
               style={{
-                padding: "6px 14px",
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 600,
                 border:
                   activeQuickFilter === f.key
                     ? "1px solid #2563eb"
                     : "1px solid #d1d5db",
                 background: activeQuickFilter === f.key ? "#2563eb" : "#fff",
-                color: activeQuickFilter === f.key ? "#fff" : "#374151",
-                cursor: "pointer"
+                color: activeQuickFilter === f.key ? "#fff" : "#374151"
               }}
             >
               {f.label}
             </button>
           ))}
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr auto",
-            gap: 10,
-            alignItems: "end"
-          }}
-        >
+        <div className="grid grid-cols-4 gap-2.5 items-end">
           <Input
             label="من تاريخ"
             type="date"
@@ -295,9 +341,9 @@ export function ReportsPage({
             ⬇️ تصدير الفواتير CSV
           </Btn>
         </div>
-      </Card>
+      </SectionCard>
 
-      <div style={{ marginBottom: 16 }}>
+      <div className="flex gap-3 flex-wrap mb-5">
         <HoverMetricCard
           label="إجمالي قيمة المخزون (تكلفة)"
           value={inventory.costValue}
@@ -311,11 +357,7 @@ export function ReportsPage({
             }))
           }}
         />
-      </div>
 
-      <div
-        style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 }}
-      >
         <AnimatedMetric
           label="إجمالي المبيعات (قبل المرتجعات)"
           value={totalSalesRaw}
@@ -369,101 +411,82 @@ export function ReportsPage({
         />
       </div>
 
-      <div
-        style={{
-          fontSize: 12,
-          color: "#92400e",
-          background: "#fffbeb",
-          border: "1px solid #fde68a",
-          borderRadius: 8,
-          padding: "8px 12px",
-          marginBottom: 16
-        }}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+        className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-5"
       >
         ⚠️ ملاحظة: صافي الربح يُحسب باستخدام سعر الشراء الحالي للأصناف، وليس
         السعر الفعلي وقت الشراء. إذا تغيرت أسعار الشراء لاحقاً (بسبب التضخم)،
         فقد يختلف الرقم الفعلي عن هذا التقدير. كما تم خصم المرتجعات من إجمالي
         المبيعات وتكلفة البضاعة المباعة لهذه الفترة، وأجرة النقل مستبعدة من صافي
         المبيعات لأنها تُحسب في تقرير النقل بشكل منفصل.
-      </div>
+      </motion.div>
 
-      <Card>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-            flexWrap: "wrap",
-            gap: 10
-          }}
-        >
-          <h3 style={{ fontSize: 14, fontWeight: 600 }}>💰 الخزينة</h3>
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 700,
-              color: treasuryBalance >= 0 ? "#0891b2" : "#dc2626"
-            }}
+      <SectionCard
+        title="الخزينة"
+        icon="💰"
+        index={1}
+        accent="#0891b2"
+        headerExtra={
+          <span
+            className="text-base font-bold"
+            style={{ color: treasuryBalance >= 0 ? "#0891b2" : "#dc2626" }}
           >
             رصيد الخزينة الحالي: {fmt(treasuryBalance)}
-          </div>
-        </div>
-        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+          </span>
+        }
+      >
+        <div className="text-xs text-gray-500 mb-3">
           الرصيد الحالي يمثل صافي النقدية الفعلية في المحل من كل عمليات القبض
-          والدفع (مبيعات، مشتريات، دفعات، استرجاعات، مصروفات، سحوبات، إيداعات) —
-          وليس مرتبطاً بتاريخ معين. المرتجعات لا تؤثر على الخزينة لأنها رصيد
-          دائن للعميل وليست نقدية فعلية. لإدارة السحب والإيداع من الخزينة، اذهب
-          لصفحة "الخزينة" من القائمة الجانبية.
+          والدفع (مبيعات، مشتريات، دفعات، استرجاعات، مصروفات، سحوبات، إيداعات،
+          دفعات حجوزات) — وليس مرتبطاً بتاريخ معين. المرتجعات لا تؤثر على
+          الخزينة لأنها رصيد دائن للعميل وليست نقدية فعلية. لإدارة السحب
+          والإيداع من الخزينة، اذهب لصفحة "الخزينة" من القائمة الجانبية.
         </div>
-        <h4
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            marginTop: 8,
-            marginBottom: 8
-          }}
-        >
+
+        <div className="flex gap-4 text-xs mb-4">
+          <span className="text-gray-500">
+            إجمالي الداخل:{" "}
+            <b className="text-green-600">{fmt(movementsBreakdown.in || 0)}</b>
+          </span>
+          <span className="text-gray-500">
+            إجمالي الخارج:{" "}
+            <b className="text-red-600">{fmt(movementsBreakdown.out || 0)}</b>
+          </span>
+        </div>
+
+        <h4 className="text-xs font-semibold mb-2 text-slate-600">
           السجل اليومي للخزينة
         </h4>
         {historyInRange.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              color: "#9ca3af",
-              fontSize: 13,
-              padding: "24px 0"
-            }}
-          >
-            لا توجد حركات نقدية في هذه الفترة
-          </div>
+          <EmptyState text="لا توجد حركات نقدية في هذه الفترة" />
         ) : (
           <Table
             cols={["التاريخ", "صافي اليوم", "رصيد الخزينة في نهاية اليوم"]}
-            rows={[...historyInRange].reverse().map((h) => [
-              h.date,
-              <span
-                style={{
-                  color: h.netOfDay >= 0 ? "#16a34a" : "#dc2626",
-                  fontWeight: 600
-                }}
-              >
-                {fmt(h.netOfDay)}
-              </span>,
-              <span style={{ fontWeight: 700 }}>{fmt(h.balanceEndOfDay)}</span>
-            ])}
+            rows={[...historyInRange]
+              .reverse()
+              .map((h) => [
+                h.date,
+                <span
+                  style={{
+                    color: h.netOfDay >= 0 ? "#16a34a" : "#dc2626",
+                    fontWeight: 600
+                  }}
+                >
+                  {fmt(h.netOfDay)}
+                </span>,
+                <span style={{ fontWeight: 700 }}>
+                  {fmt(h.balanceEndOfDay)}
+                </span>
+              ])}
           />
         )}
+
         {treasuryWithdrawals.length > 0 && (
           <>
-            <h4
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                marginTop: 16,
-                marginBottom: 8
-              }}
-            >
+            <h4 className="text-xs font-semibold mt-4 mb-2 text-slate-600">
               سجل سحوبات الخزينة
             </h4>
             <Table
@@ -485,16 +508,10 @@ export function ReportsPage({
             />
           </>
         )}
+
         {treasuryDeposits.length > 0 && (
           <>
-            <h4
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                marginTop: 16,
-                marginBottom: 8
-              }}
-            >
+            <h4 className="text-xs font-semibold mt-4 mb-2 text-slate-600">
               سجل إيداعات الخزينة
             </h4>
             <Table
@@ -517,91 +534,95 @@ export function ReportsPage({
             />
           </>
         )}
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          الفواتير
-        </h3>
-        <Table
-          cols={[
-            "رقم الفاتورة",
-            "النوع",
-            "التاريخ",
-            "الجهة",
-            "الإجمالي",
-            "مدفوع",
-            "متبقي"
-          ]}
-          rows={[...filtered]
-            .reverse()
-            .map((i) => [
-              i.id.slice(-6).toUpperCase(),
-              i.type === "sale" ? (
-                <Badge color="blue">بيع</Badge>
-              ) : (
-                <Badge color="purple">شراء</Badge>
-              ),
-              localDateOf(i.date),
-              i.partyName || "—",
-              fmt(i.total),
-              fmt(i.paid),
-              <span
-                style={{ color: i.total - i.paid > 0 ? "#dc2626" : "#16a34a" }}
-              >
-                {fmt(i.total - i.paid)}
-              </span>
-            ])}
-        />
-      </Card>
+      <SectionCard title="الفواتير" icon="📋" index={2} accent="#2563eb">
+        <div className="[&_tbody_tr]:transition-colors [&_tbody_tr]:hover:bg-slate-50">
+          <Table
+            cols={[
+              "رقم الفاتورة",
+              "النوع",
+              "التاريخ",
+              "الجهة",
+              "الإجمالي",
+              "مدفوع",
+              "متبقي"
+            ]}
+            rows={[...filtered]
+              .reverse()
+              .map((i) => [
+                i.id.slice(-6).toUpperCase(),
+                i.type === "sale" ? (
+                  <Badge color="blue">بيع</Badge>
+                ) : (
+                  <Badge color="purple">شراء</Badge>
+                ),
+                localDateOf(i.date),
+                i.partyName || "—",
+                fmt(i.total),
+                fmt(i.paid),
+                <span
+                  style={{
+                    color: i.total - i.paid > 0 ? "#dc2626" : "#16a34a"
+                  }}
+                >
+                  {fmt(i.total - i.paid)}
+                </span>
+              ])}
+          />
+        </div>
+      </SectionCard>
 
-      <Card>
-        <h3 className="text-sm font-semibold mb-3">
-          📊 المبيعات وصافي الربح — آخر 6 أشهر
-        </h3>
+      <SectionCard
+        title="المبيعات وصافي الربح — آخر 6 أشهر"
+        icon="📊"
+        index={3}
+        accent="#16a34a"
+      >
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={netProfitTrend}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="label" fontSize={11} />
-            <YAxis fontSize={11} />
-            <Tooltip formatter={(v) => fmt(v)} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <XAxis dataKey="label" fontSize={11} stroke="#94a3b8" />
+            <YAxis fontSize={11} stroke="#94a3b8" />
+            <Tooltip
+              contentStyle={{
+                borderRadius: 10,
+                border: "1px solid #e2e8f0",
+                fontSize: 12
+              }}
+              formatter={(v) => fmt(v)}
+            />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Line
               type="monotone"
               dataKey="revenue"
               name="المبيعات"
               stroke="#16a34a"
-              strokeWidth={2}
-              dot={{ r: 3 }}
+              strokeWidth={2.5}
+              dot={{ r: 4 }}
+              animationDuration={1000}
             />
             <Line
               type="monotone"
               dataKey="netProfit"
               name="صافي الربح"
               stroke="#7c3aed"
-              strokeWidth={2}
-              dot={{ r: 3 }}
+              strokeWidth={2.5}
+              dot={{ r: 4 }}
+              animationDuration={1000}
             />
           </LineChart>
         </ResponsiveContainer>
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          المرتجعات ({filteredReturns.length}) — إجمالي{" "}
-          {fmt(totalReturnsAmount)}
-        </h3>
+      <SectionCard
+        title={`المرتجعات (${filteredReturns.length}) — إجمالي ${fmt(totalReturnsAmount)}`}
+        icon="↩️"
+        index={4}
+        accent="#ea580c"
+      >
         {filteredReturns.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              color: "#9ca3af",
-              fontSize: 13,
-              padding: "24px 0"
-            }}
-          >
-            لا توجد مرتجعات في هذه الفترة
-          </div>
+          <EmptyState text="لا توجد مرتجعات في هذه الفترة" />
         ) : (
           <Table
             cols={["التاريخ", "العميل", "الصنف", "الكمية", "المبلغ", "ملاحظة"]}
@@ -619,20 +640,14 @@ export function ReportsPage({
               ])}
           />
         )}
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-            flexWrap: "wrap",
-            gap: 10
-          }}
-        >
-          <h3 style={{ fontSize: 14, fontWeight: 600 }}>🚚 تقرير النقل</h3>
+      <SectionCard
+        title="تقرير النقل"
+        icon="🚚"
+        index={5}
+        accent="#2563eb"
+        headerExtra={
           <Select
             label=""
             value={transportFilter}
@@ -645,15 +660,9 @@ export function ReportsPage({
               </option>
             ))}
           </Select>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            flexWrap: "wrap",
-            marginBottom: 12
-          }}
-        >
+        }
+      >
+        <div className="flex gap-3 flex-wrap mb-4">
           <Metric label="عدد التوصيلات" value={filteredTransportJobs.length} />
           <Metric
             label="إجمالي الأجور"
@@ -672,16 +681,7 @@ export function ReportsPage({
           />
         </div>
         {filteredTransportJobs.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              color: "#9ca3af",
-              fontSize: 13,
-              padding: "24px 0"
-            }}
-          >
-            لا توجد عمليات نقل في هذه الفترة
-          </div>
+          <EmptyState text="لا توجد عمليات نقل في هذه الفترة" />
         ) : (
           <Table
             cols={[
@@ -710,38 +710,24 @@ export function ReportsPage({
               ])}
           />
         )}
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12
-          }}
-        >
-          <h3 style={{ fontSize: 14, fontWeight: 600 }}>
-            المصروفات ({filteredExpenses.length}) — إجمالي {fmt(totalExpenses)}
-          </h3>
+      <SectionCard
+        title={`المصروفات (${filteredExpenses.length}) — إجمالي ${fmt(totalExpenses)}`}
+        icon="🧾"
+        index={6}
+        accent="#b91c1c"
+        headerExtra={
           <Btn
             color="green"
             onClick={() => exportExpensesToCSV(filteredExpenses, from, to)}
           >
             ⬇️ تصدير المصروفات CSV
           </Btn>
-        </div>
+        }
+      >
         {filteredExpenses.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              color: "#9ca3af",
-              fontSize: 13,
-              padding: "24px 0"
-            }}
-          >
-            لا توجد مصروفات في هذه الفترة
-          </div>
+          <EmptyState text="لا توجد مصروفات في هذه الفترة" />
         ) : (
           <Table
             cols={["التاريخ", "التصنيف", "المبلغ", "ملاحظة"]}
@@ -757,7 +743,7 @@ export function ReportsPage({
               ])}
           />
         )}
-      </Card>
+      </SectionCard>
     </div>
   );
 }

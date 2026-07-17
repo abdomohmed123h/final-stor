@@ -165,9 +165,10 @@ export default function App() {
     ),
     invoices: (
       <InvoicesPage
+        products={products}
+        setProducts={setProducts}
         invoices={invoices}
-        customers={customers}
-        suppliers={suppliers}
+        showToast={showToast}
         setModal={setModal}
       />
     ),

@@ -5,7 +5,8 @@ import {
   invoiceRemaining,
   debtFor,
   creditFor,
-  reservationPaymentStatus
+  reservationPaymentStatus,
+  reservationEffectivePaid
 } from "../../utils/calculations";
 
 const reservationStatusBadge = {
@@ -21,7 +22,8 @@ const reservationStatusLabel = {
 
 function ReservationRow({ reservation, onPay, onCancel, onConvertToSale }) {
   const [amount, setAmount] = useState("");
-  const remaining = reservation.total - reservation.paid;
+  const effectivePaid = reservationEffectivePaid(reservation);
+  const remaining = reservation.total - effectivePaid;
   const isActive = reservation.status === "active";
 
   return (
@@ -42,13 +44,19 @@ function ReservationRow({ reservation, onPay, onCancel, onConvertToSale }) {
         </div>
       </div>
 
-      <div className="flex gap-3 mt-2 text-xs">
+      <div className="flex gap-3 mt-2 text-xs flex-wrap">
         <span className="text-gray-500">
           الإجمالي: <b className="text-slate-700">{fmt(reservation.total)}</b>
         </span>
         <span className="text-gray-500">
-          المدفوع: <b className="text-green-600">{fmt(reservation.paid)}</b>
+          المدفوع: <b className="text-green-600">{fmt(effectivePaid)}</b>
         </span>
+        {reservation.creditUsed > 0 && (
+          <span className="text-gray-500">
+            (منها من الرصيد:{" "}
+            <b className="text-blue-600">{fmt(reservation.creditUsed)}</b>)
+          </span>
+        )}
         <span className="text-gray-500">
           المتبقي:{" "}
           <b className={remaining > 0 ? "text-red-600" : "text-green-600"}>

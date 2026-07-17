@@ -353,7 +353,7 @@ export function employeeBalanceFor(employee) {
   return Math.max(0, employeeEarningsTotal(employee) - employeePaidTotal(employee));
 }
 
-// ============================================================
+/// ============================================================
 // RESERVATIONS (customer holds on stock, does not affect inventory)
 // ============================================================
 
@@ -367,24 +367,28 @@ export function reservedQtyForProduct(reservations, productId) {
   return activeReservationsForProduct(reservations, productId).reduce((s, r) => s + (r.qty || 0), 0);
 }
 
-// Payment status label for a reservation.
-export function reservationPaymentStatus(reservation) {
-  if (reservation.paid >= reservation.total) return "مدفوع كامل";
-  if (reservation.paid > 0) return "مدفوع جزئي";
-  return "غير مدفوع";
+// Total effectively paid on a reservation, combining cash paid directly
+// AND any customer credit applied at creation time. Every screen that
+// shows reservation payment status must use this, not r.paid alone --
+// r.paid only tracks cash and silently ignores credit usage otherwise.
+export function reservationEffectivePaid(reservation) {
+  return (reservation.paid || 0) + (reservation.creditUsed || 0);
 }
 
+// Payment status label for a reservation.
+export function reservationPaymentStatus(reservation) {
+  const effectivePaid = reservationEffectivePaid(reservation);
+  if (effectivePaid >= reservation.total) return "مدفوع كامل";
+  if (effectivePaid > 0) return "مدفوع جزئي";
+  return "غير مدفوع";
+}
 // All reservations for one customer.
 export const reservationsForCustomer = (reservations, customerId) =>
   reservations.filter((r) => r.customerId === customerId);
 
 // ============================================================
 // ACCOUNT HISTORY
-// ============================================================
-
-// Unified account history for one customer: every invoice, payment,
-// withdrawal, return, AND reservation activity, normalized to one shape
-// for a single timeline.
+// ============================================================imeline.
 export function partyAccountHistory(invoices, party, reservations = []) {
   const partyInvoices = invoices.filter((i) => i.partyId === party.id);
   const payments = party.payments || [];

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal, Select, Input, Btn } from "../ui";
+import { HoverMetricCard } from "../ui/HoverMetricCard";
 import { fmt } from "../../utils/format";
 import { creditFor } from "../../utils/calculations";
 
@@ -8,7 +9,8 @@ export function AddReservationModal({
   customers,
   invoices,
   onSave,
-  onClose
+  onClose,
+  showToast
 }) {
   const [customerId, setCustomerId] = useState("");
   const [productId, setProductId] = useState("");
@@ -41,16 +43,25 @@ export function AddReservationModal({
   };
 
   const handleSave = () => {
-    if (!customerId) return alert("اختر العميل");
-    if (!productId) return alert("اختر المنتج");
-    if (!qty || parseFloat(qty) <= 0) return alert("أدخل كمية صحيحة");
+    if (!customerId) return showToast("اختر العميل");
+    if (!productId) return showToast("اختر المنتج");
+    if (!qty || parseFloat(qty) <= 0) return showToast("أدخل كمية صحيحة");
+
+    const cashPaid = parseFloat(paid) || 0;
+    const maxCash = Math.max(total - creditApplied, 0);
+    if (cashPaid > maxCash) {
+      return showToast(
+        `المبلغ المدفوع نقداً أكبر من المطلوب. الحد الأقصى المسموح: ${fmt(maxCash)} (بعد خصم الرصيد المستخدم ${fmt(creditApplied)})`
+      );
+    }
+
     onSave({
       customerId,
       productId,
       qty: parseFloat(qty),
       unitPrice: parseFloat(unitPrice) || 0,
       total,
-      paid: parseFloat(paid) || 0,
+      paid: cashPaid,
       creditUsed: creditApplied,
       notes
     });
@@ -118,9 +129,28 @@ export function AddReservationModal({
         />
       </div>
 
-      <div className="bg-blue-50 rounded-lg p-2.5 text-center mb-3">
-        <div className="text-xs text-gray-500">إجمالي قيمة الحجز</div>
-        <div className="text-lg font-bold text-blue-600">{fmt(total)}</div>
+      <div className="mb-3">
+        <HoverMetricCard
+          label="إجمالي قيمة الحجز"
+          value={total}
+          color="#2563eb"
+          details={{
+            title: "تفاصيل الحساب",
+            rows: [
+              { label: "الكمية", value: `${qty || 0} ${product?.unit || ""}` },
+              { label: "سعر الوحدة", value: fmt(parseFloat(unitPrice) || 0) },
+              ...(creditApplied > 0
+                ? [
+                    {
+                      label: "من رصيد العميل",
+                      value: fmt(creditApplied),
+                      color: "#16a34a"
+                    }
+                  ]
+                : [])
+            ]
+          }}
+        />
       </div>
 
       {creditApplied > 0 && (
